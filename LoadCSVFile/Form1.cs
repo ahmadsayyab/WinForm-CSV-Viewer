@@ -1,11 +1,14 @@
-﻿using Microsoft.VisualBasic.FileIO;
+﻿using CsvHelper;
+using Microsoft.VisualBasic.FileIO;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net.Cache;
 using System.Security.AccessControl;
 using System.Text;
 using System.Threading.Tasks;
@@ -20,66 +23,51 @@ namespace LoadCSVFile
             InitializeComponent();
         }
 
+        string path = @"C:\Users\Sayyabkhan\Desktop\SudentData.csv";
 
-        private void LoadData(string path)
+        DataTable dataTable = new DataTable();
+        private void LoadData()
         {
-            if(!string.IsNullOrEmpty(path))
+            
+
+            using (var reader = new StreamReader(path))
+            using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
             {
-                //using (StreamReader readFile = new StreamReader(path))
-                using (TextFieldParser parseFiled = new TextFieldParser(path))
+                // Get all records
+                var records = csv.GetRecords<dynamic>().ToList();
+
+
+                // Add columns to DataTable using the first record
+
+                foreach (var record in records.First())
                 {
-                    //shows that the data is delimited through commas
-                    parseFiled.TextFieldType = FieldType.Delimited;
-                    parseFiled.SetDelimiters(",");
-
-
-                    //print column names
-                    String[] headers = parseFiled.ReadFields();
-
-                    foreach (String header in headers)
-                    {
-                        dataGridView1.Columns.Add(header, header);
-
-                    }
-
-
-                    //print rows
-                    while (!parseFiled.EndOfData)
-                    {
-                        string[] rows = parseFiled.ReadFields();
-
-                        dataGridView1.Rows.Add(rows);
-                    }
-
-
+                    dataTable.Columns.Add(record.Key);
                 }
 
+                // Add rows to DataTable
+                foreach (var record in records)
+                {
+                    DataRow row = dataTable.NewRow();
+
+                    foreach (var field in record)
+                    {
+                        row[field.Key] = field.Value;
+                    }
+                    dataTable.Rows.Add(row);
+                }
 
             }
 
-            else
-            {
-                MessageBox.Show("Please upload a file first.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-
+            dataGridView1.DataSource = dataTable;
         }
 
 
-        //upload a file to display its data
-        private void btnBrowse_Click(object sender, EventArgs e)
-        {
-            OpenFileDialog openFileDialog = new OpenFileDialog();
 
-            openFileDialog.ShowDialog();
-            txtBrowseFile.Text = openFileDialog.FileName;
-        }
-
-
-        //Display the uploaded file data in a gridView
+        //Display csv file data in a gridView
         private void btnLoadData_Click(object sender, EventArgs e)
         {
-           LoadData(txtBrowseFile.Text);
-            txtBrowseFile.Clear();
+            LoadData();
+
         }
 
 
@@ -90,34 +78,43 @@ namespace LoadCSVFile
 
             // Variable to track if any matching record is found
             bool matchFound = false;
-            foreach (DataGridViewRow row in dataGridView1.Rows)
+
+            // Create a new DataTable with the same structure as the original DataTable
+            DataTable filteredTable = dataTable.Clone();
+
+            foreach (DataRow row in dataTable.Rows)
             {
-                if (!row.IsNewRow)
+                bool rowVisible = false;
+
+                foreach (DataColumn column in dataTable.Columns)
                 {
-                    for (int i = 0; i < row.Cells.Count; i++)
+                    if (row[column] != null && row[column].ToString().Equals(record, StringComparison.OrdinalIgnoreCase))
                     {
-                        if (row.Cells[i].Value != null && row.Cells[i].Value.ToString().Equals(record, StringComparison.OrdinalIgnoreCase))
-                        {
-                            row.Visible = true;
-                            matchFound = true; 
-                            break;
-                        }
-                        else
-                        {
-                            // Hide non-matching rows
-                            row.Visible = false; 
-                        }
+                        rowVisible = true;
+                        matchFound = true;
+                        break;
                     }
+                }
+
+                // Add the row to the filtered DataTable if it matches the search term
+                if (rowVisible)
+                {
+                    filteredTable.ImportRow(row);
                 }
             }
 
-                
-                if (!matchFound)
-                {
-                    MessageBox.Show("Record not found!!!", "Record Search", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
+            // Set the DataGridView's DataSource to the filtered DataTable
+            dataGridView1.DataSource = filteredTable;
 
+            if (!matchFound)
+            {
+                MessageBox.Show("Record not found!!!", "Record Search", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
         }
+
+
+
+
 
 
 
@@ -134,7 +131,5 @@ namespace LoadCSVFile
                 MessageBox.Show("Please enter into the Search bar.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
-
-       
     }
 }
